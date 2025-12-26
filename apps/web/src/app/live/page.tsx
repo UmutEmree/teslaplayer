@@ -5,13 +5,62 @@ import { useRouter } from 'next/navigation';
 import { Channel, getLiveChannels } from '@/lib/channels';
 import Link from 'next/link';
 
+// Country code to flag emoji mapping
+const getCountryFlag = (countryCode: string): string => {
+  const flagMap: Record<string, string> = {
+    'TR': '🇹🇷',
+    'US': '🇺🇸',
+    'GB': '🇬🇧',
+    'DE': '🇩🇪',
+    'FR': '🇫🇷',
+    'IT': '🇮🇹',
+    'ES': '🇪🇸',
+    'NL': '🇳🇱',
+    'BE': '🇧🇪',
+    'RU': '🇷🇺',
+    'UA': '🇺🇦',
+    'PL': '🇵🇱',
+    'GR': '🇬🇷',
+    'SE': '🇸🇪',
+    'NO': '🇳🇴',
+    'DK': '🇩🇰',
+    'FI': '🇫🇮',
+    'PT': '🇵🇹',
+    'RO': '🇷🇴',
+    'BG': '🇧🇬',
+    'HR': '🇭🇷',
+    'RS': '🇷🇸',
+    'CZ': '🇨🇿',
+    'SK': '🇸🇰',
+    'HU': '🇭🇺',
+    'AT': '🇦🇹',
+    'CH': '🇨🇭',
+    'AR': '🇦🇷',
+    'BR': '🇧🇷',
+    'MX': '🇲🇽',
+    'CA': '🇨🇦',
+    'AU': '🇦🇺',
+    'NZ': '🇳🇿',
+    'JP': '🇯🇵',
+    'KR': '🇰🇷',
+    'CN': '🇨🇳',
+    'IN': '🇮🇳',
+    'SA': '🇸🇦',
+    'AE': '🇦🇪',
+    'IL': '🇮🇱',
+    'EG': '🇪🇬',
+    'ZA': '🇿🇦',
+  };
+  return flagMap[countryCode.toUpperCase()] || '🌍';
+};
+
 export default function LivePage() {
   const router = useRouter();
   const [channels, setChannels] = useState<Channel[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedChannel, setSelectedChannel] = useState<Channel | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [selectedCountry, setSelectedCountry] = useState<string>('all');
 
   useEffect(() => {
     const loadChannels = async () => {
@@ -32,14 +81,24 @@ export default function LivePage() {
     loadChannels();
   }, []);
 
-  // Get unique categories
-  const categories = ['all', ...Array.from(new Set(channels.map(c => c.category).filter(Boolean)))];
+  // Get unique countries and sort by channel count
+  const countriesMap = new Map<string, number>();
+  channels.forEach(c => {
+    if (c.country) {
+      countriesMap.set(c.country, (countriesMap.get(c.country) || 0) + 1);
+    }
+  });
+
+  const countries = ['all', ...Array.from(countriesMap.keys()).sort((a, b) => {
+    // Sort by channel count (descending)
+    return (countriesMap.get(b) || 0) - (countriesMap.get(a) || 0);
+  })];
 
   // Filter channels
   const filteredChannels = channels.filter(channel => {
     const matchesSearch = channel.name.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesCategory = selectedCategory === 'all' || channel.category === selectedCategory;
-    return matchesSearch && matchesCategory;
+    const matchesCountry = selectedCountry === 'all' || channel.country === selectedCountry;
+    return matchesSearch && matchesCountry;
   });
 
   if (loading) {
@@ -95,14 +154,14 @@ export default function LivePage() {
             />
 
             <select
-              value={selectedCategory}
-              onChange={(e) => setSelectedCategory(e.target.value)}
+              value={selectedCountry}
+              onChange={(e) => setSelectedCountry(e.target.value)}
               className="w-full bg-black/50 border border-white/20 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-tesla-red transition-colors"
             >
-              <option value="all">Tüm Kategoriler</option>
-              {categories.filter(c => c !== 'all').map((category) => (
-                <option key={category} value={category}>
-                  {category}
+              <option value="all">🌍 Tüm Ülkeler ({channels.length})</option>
+              {countries.filter(c => c !== 'all').map((country) => (
+                <option key={country} value={country}>
+                  {getCountryFlag(country)} {country} ({countriesMap.get(country)})
                 </option>
               ))}
             </select>
@@ -142,11 +201,13 @@ export default function LivePage() {
                         }`}>
                           {channel.name}
                         </h3>
-                        {channel.category && (
-                          <p className="text-xs text-gray-500 mt-1">{channel.category}</p>
-                        )}
                         {channel.country && (
-                          <p className="text-xs text-gray-600 mt-0.5">{channel.country}</p>
+                          <p className="text-xs text-gray-500 mt-1">
+                            {getCountryFlag(channel.country)} {channel.country}
+                          </p>
+                        )}
+                        {channel.category && (
+                          <p className="text-xs text-gray-600 mt-0.5">{channel.category}</p>
                         )}
                       </div>
                     </div>
@@ -199,7 +260,7 @@ export default function LivePage() {
                         )}
                         {selectedChannel.country && (
                           <span className="inline-block bg-white/10 text-gray-300 px-3 py-1 rounded-full text-sm">
-                            {selectedChannel.country}
+                            {getCountryFlag(selectedChannel.country)} {selectedChannel.country}
                           </span>
                         )}
                       </div>
