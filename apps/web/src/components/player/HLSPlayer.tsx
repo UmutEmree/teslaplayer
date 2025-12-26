@@ -16,103 +16,165 @@ declare global {
 
 export function HLSPlayer({ hlsUrl, channelName }: HLSPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const hlsRef = useRef<any>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showControls, setShowControls] = useState(true);
   const [volume, setVolume] = useState(1);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
+    let mounted = true;
     const video = videoRef.current;
     if (!video) return;
 
-    // Check for native HLS support (Safari)
+    console.log('[HLS] Initializing player for:', hlsUrl);
+
+    const attemptPlay = async () => {
+      if (!video || !mounted) return;
+
+      try {
+        // Wait a bit for user interaction context
+        await new Promise(resolve => setTimeout(resolve, 100));
+        await video.play();
+        if (mounted) {
+          setIsPlaying(true);
+          setIsLoading(false);
+        }
+      } catch (err: any) {
+        console.warn('[HLS] Autoplay prevented:', err.message);
+        if (mounted) {
+          setIsLoading(false);
+          // Don't set error for autoplay issues, just wait for user click
+        }
+      }
+    };
+
+    // Check for native HLS support (Safari, iOS)
     if (video.canPlayType('application/vnd.apple.mpegurl')) {
       console.log('[HLS] Using native HLS support');
       video.src = hlsUrl;
-      video.play().catch((err) => {
-        console.error('[HLS] Play error:', err);
-        setError('Video oynatılamadı');
-      });
-      return;
+      video.load();
+
+      const handleCanPlay = () => {
+        console.log('[HLS] Video can play');
+        attemptPlay();
+      };
+
+      video.addEventListener('canplay', handleCanPlay);
+
+      return () => {
+        mounted = false;
+        video.removeEventListener('canplay', handleCanPlay);
+        video.src = '';
+      };
     }
 
     // Use HLS.js for other browsers
     const loadHLS = async () => {
       // Wait for HLS.js to load
       let retries = 0;
-      while (!window.Hls && retries < 10) {
+      while (!window.Hls && retries < 20 && mounted) {
         await new Promise(resolve => setTimeout(resolve, 200));
         retries++;
       }
 
+      if (!mounted) return;
+
       if (!window.Hls) {
-        setError('HLS.js yüklenemedi');
+        console.error('[HLS] HLS.js not loaded after 4 seconds');
+        setError('HLS.js yüklenemedi. Sayfayı yenileyin.');
+        setIsLoading(false);
         return;
       }
 
-      if (window.Hls.isSupported()) {
-        console.log('[HLS] Using HLS.js');
-        const hls = new window.Hls({
-          enableWorker: true,
-          lowLatencyMode: true,
-          backBufferLength: 90,
-          maxBufferLength: 30,
-          maxBufferSize: 60 * 1000 * 1000,
-          maxMaxBufferLength: 60,
-        });
+      if (!window.Hls.isSupported()) {
+        console.error('[HLS] HLS.js not supported');
+        setError('HLS desteklenmiyor');
+        setIsLoading(false);
+        return;
+      }
 
+      console.log('[HLS] Using HLS.js');
+      const hls = new window.Hls({
+        enableWorker: true,
+        lowLatencyMode: true,
+        backBufferLength: 30,
+        maxBufferLength: 30,
+        maxBufferSize: 60 * 1000 * 1000,
+        maxMaxBufferLength: 60,
+        debug: false,
+      });
+
+      hlsRef.current = hls;
+
+      hls.on(window.Hls.Events.MANIFEST_PARSED, () => {
+        if (!mounted) return;
+        console.log('[HLS] Manifest loaded, attempting playback');
+        attemptPlay();
+      });
+
+      hls.on(window.Hls.Events.ERROR, (_event: any, data: any) => {
+        if (!mounted) return;
+        console.error('[HLS] Error:', data);
+
+        if (data.fatal) {
+          switch (data.type) {
+            case window.Hls.ErrorTypes.NETWORK_ERROR:
+              console.error('[HLS] Network error, trying to recover...');
+              hls.startLoad();
+              break;
+            case window.Hls.ErrorTypes.MEDIA_ERROR:
+              console.error('[HLS] Media error, trying to recover...');
+              hls.recoverMediaError();
+              break;
+            default:
+              console.error('[HLS] Fatal error, cannot recover');
+              setError('Yayın yüklenirken hata oluştu');
+              setIsLoading(false);
+              hls.destroy();
+              break;
+          }
+        }
+      });
+
+      try {
         hls.loadSource(hlsUrl);
         hls.attachMedia(video);
-
-        hls.on(window.Hls.Events.MANIFEST_PARSED, () => {
-          console.log('[HLS] Manifest loaded, starting playback');
-          video.play().catch((err) => {
-            console.error('[HLS] Play error:', err);
-            setError('Video oynatılamadı. Lütfen tıklayın.');
-          });
-        });
-
-        hls.on(window.Hls.Events.ERROR, (_event: any, data: any) => {
-          console.error('[HLS] Error:', data);
-          if (data.fatal) {
-            switch (data.type) {
-              case window.Hls.ErrorTypes.NETWORK_ERROR:
-                console.error('[HLS] Network error, trying to recover...');
-                hls.startLoad();
-                break;
-              case window.Hls.ErrorTypes.MEDIA_ERROR:
-                console.error('[HLS] Media error, trying to recover...');
-                hls.recoverMediaError();
-                break;
-              default:
-                setError('Yayın yüklenirken hata oluştu');
-                hls.destroy();
-                break;
-            }
-          }
-        });
-
-        // Cleanup
-        return () => {
-          hls.destroy();
-        };
-      } else {
-        setError('HLS desteklenmiyor');
+      } catch (err) {
+        console.error('[HLS] Error loading source:', err);
+        setError('Kaynak yüklenemedi');
+        setIsLoading(false);
       }
     };
 
     loadHLS();
 
     // Event listeners
-    const handlePlay = () => setIsPlaying(true);
-    const handlePause = () => setIsPlaying(false);
+    const handlePlay = () => mounted && setIsPlaying(true);
+    const handlePause = () => mounted && setIsPlaying(false);
+    const handleError = (e: Event) => {
+      console.error('[HLS] Video element error:', e);
+      if (mounted) {
+        setError('Video yüklenemedi');
+        setIsLoading(false);
+      }
+    };
 
     video.addEventListener('play', handlePlay);
     video.addEventListener('pause', handlePause);
+    video.addEventListener('error', handleError);
 
     return () => {
+      mounted = false;
       video.removeEventListener('play', handlePlay);
       video.removeEventListener('pause', handlePause);
+      video.removeEventListener('error', handleError);
+
+      if (hlsRef.current) {
+        hlsRef.current.destroy();
+        hlsRef.current = null;
+      }
     };
   }, [hlsUrl]);
 
@@ -125,13 +187,26 @@ export function HLSPlayer({ hlsUrl, channelName }: HLSPlayerProps) {
 
   // Auto-hide controls
   useEffect(() => {
+    if (!isPlaying) return;
+
     const timer = setTimeout(() => {
-      if (isPlaying) setShowControls(false);
+      setShowControls(false);
     }, 3000);
+
     return () => clearTimeout(timer);
   }, [isPlaying, showControls]);
 
   const handleVideoClick = () => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    // If paused, play it
+    if (video.paused) {
+      video.play().catch(err => {
+        console.error('[HLS] Play failed:', err);
+      });
+    }
+
     setShowControls(prev => !prev);
   };
 
@@ -151,7 +226,19 @@ export function HLSPlayer({ hlsUrl, channelName }: HLSPlayerProps) {
         playsInline
         autoPlay
         muted={false}
+        preload="auto"
       />
+
+      {/* Loading State */}
+      {isLoading && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/80 pointer-events-none">
+          <div className="text-center">
+            <div className="w-12 h-12 border-4 border-tesla-red border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+            <p className="text-white">Yükleniyor...</p>
+            <p className="text-gray-400 text-sm mt-1">{channelName}</p>
+          </div>
+        </div>
+      )}
 
       {/* Error State */}
       {error && (
@@ -160,7 +247,10 @@ export function HLSPlayer({ hlsUrl, channelName }: HLSPlayerProps) {
             <div className="text-tesla-red text-6xl mb-4">!</div>
             <p className="text-white text-lg">{error}</p>
             <button
-              onClick={() => window.location.reload()}
+              onClick={(e) => {
+                e.stopPropagation();
+                window.location.reload();
+              }}
               className="mt-6 px-6 py-3 bg-tesla-red hover:bg-red-700 text-white rounded-lg transition-colors"
             >
               Yeniden Yükle
