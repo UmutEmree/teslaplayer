@@ -7,9 +7,24 @@ import { StreamManager } from './services/StreamManager';
 
 const app = express();
 
-// Middleware
+// Middleware - CORS with Vercel support
 app.use(cors({
-  origin: config.corsOrigins,
+  origin: (origin, callback) => {
+    // Allow no origin (mobile apps, curl, etc.)
+    if (!origin) return callback(null, true);
+
+    // Allow localhost for development
+    if (origin.includes('localhost')) return callback(null, true);
+
+    // Allow all Vercel deployments (preview + production)
+    if (origin.includes('vercel.app')) return callback(null, true);
+
+    // Allow configured origins
+    if (config.corsOrigins.includes(origin)) return callback(null, true);
+
+    // Reject others
+    callback(new Error('Not allowed by CORS'));
+  },
   credentials: true
 }));
 app.use(express.json());
