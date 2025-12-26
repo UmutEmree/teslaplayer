@@ -4,6 +4,7 @@ import { createServer } from 'http';
 import { config, initializeChannels } from './config';
 import { streamRouter } from './routes/stream';
 import { channelsRouter } from './routes/channels';
+import { contentRouter } from './routes/content';
 import { StreamManager } from './services/StreamManager';
 
 const app = express();
@@ -37,6 +38,7 @@ export const streamManager = new StreamManager();
 // Routes
 app.use('/api/stream', streamRouter);
 app.use('/api/channels', channelsRouter);
+app.use('/api/content', contentRouter);
 
 // Health check
 app.get('/health', (req, res) => {

@@ -1,4 +1,13 @@
-interface ParsedChannel {
+export type ContentType = 'movie' | 'series' | 'live';
+
+export interface SeriesInfo {
+  seriesName: string;
+  season: number;
+  episode: number;
+  episodeTitle?: string;
+}
+
+export interface ParsedChannel {
   id: string;
   name: string;
   logo: string;
@@ -7,6 +16,30 @@ interface ParsedChannel {
   country?: string;
   tvgId?: string;
   groupTitle?: string;
+  contentType: ContentType;
+  seriesInfo?: SeriesInfo;
+  year?: number;
+}
+
+export interface Series {
+  id: string;
+  name: string;
+  year?: number;
+  logo: string;
+  category: string;
+  seasons: Season[];
+}
+
+export interface Season {
+  seasonNumber: number;
+  episodes: Episode[];
+}
+
+export interface Episode {
+  id: string;
+  episodeNumber: number;
+  name: string;
+  hlsUrl: string;
 }
 
 /**
@@ -56,16 +89,23 @@ export async function parseM3U8(url: string): Promise<ParsedChannel[]> {
         // Only add if we have a valid stream URL
         if (streamUrl && (streamUrl.startsWith('http') || streamUrl.startsWith('rtsp'))) {
           const id = generateChannelId(channelName, tvgId);
+          const category = groupTitle || detectCategory(url, channelName);
+
+          // Parse content type and series info
+          const contentInfo = parseContentInfo(channelName, category);
 
           channels.push({
             id,
             name: channelName,
             logo: tvgLogo || generatePlaceholderLogo(channelName),
             hlsUrl: streamUrl,
-            category: groupTitle || detectCategory(url, channelName),
+            category,
             country: tvgCountry || extractCountryFromUrl(url),
             tvgId,
-            groupTitle
+            groupTitle,
+            contentType: contentInfo.contentType,
+            seriesInfo: contentInfo.seriesInfo,
+            year: contentInfo.year
           });
         }
       }
@@ -103,6 +143,68 @@ export async function parseMultipleM3U8(urls: string[]): Promise<ParsedChannel[]
   console.log(`[M3U8Parser] Total unique channels: ${uniqueChannels.length}`);
 
   return uniqueChannels;
+}
+
+/**
+ * Parse content type and series information from channel name
+ */
+function parseContentInfo(name: string, groupTitle: string): {
+  contentType: ContentType;
+  seriesInfo?: SeriesInfo;
+  year?: number;
+} {
+  // Check for series pattern: S01E02, S01 E02, etc.
+  const seriesPattern = /S(\d+)\s*E(\d+)/i;
+  const seriesMatch = name.match(seriesPattern);
+
+  if (seriesMatch) {
+    const season = parseInt(seriesMatch[1]);
+    const episode = parseInt(seriesMatch[2]);
+
+    // Extract series name (everything before S01E02)
+    const seriesName = name
+      .replace(seriesPattern, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    // Extract year if present
+    const yearMatch = seriesName.match(/\((\d{4})\)/);
+    const year = yearMatch ? parseInt(yearMatch[1]) : undefined;
+
+    // Clean series name
+    const cleanSeriesName = seriesName
+      .replace(/\(\d{4}\)/, '')
+      .trim();
+
+    return {
+      contentType: 'series',
+      seriesInfo: {
+        seriesName: cleanSeriesName,
+        season,
+        episode
+      },
+      year
+    };
+  }
+
+  // Check for live TV indicators
+  const liveIndicators = ['live', 'tv', 'channel', 'news', 'sport'];
+  const isLive = liveIndicators.some(indicator =>
+    groupTitle.toLowerCase().includes(indicator)
+  );
+
+  if (isLive) {
+    return { contentType: 'live' };
+  }
+
+  // Default to movie
+  const yearMatch = name.match(/\((\d{4})\)/);
+  const year = yearMatch ? parseInt(yearMatch[1]) : undefined;
+
+  return {
+    contentType: 'movie',
+    year
+  };
 }
 
 /**
@@ -211,6 +313,64 @@ function deduplicateChannels(channels: ParsedChannel[]): ParsedChannel[] {
   }
 
   return unique;
+}
+
+/**
+ * Group series episodes into hierarchical structure
+ */
+export function groupSeries(channels: ParsedChannel[]): Series[] {
+  const seriesMap = new Map<string, Series>();
+
+  channels
+    .filter(ch => ch.contentType === 'series' && ch.seriesInfo)
+    .forEach(ch => {
+      const { seriesInfo } = ch;
+      if (!seriesInfo) return;
+
+      const seriesKey = `${seriesInfo.seriesName}-${ch.year || ''}`;
+
+      // Get or create series
+      let series = seriesMap.get(seriesKey);
+      if (!series) {
+        series = {
+          id: generateChannelId(seriesInfo.seriesName),
+          name: seriesInfo.seriesName,
+          year: ch.year,
+          logo: ch.logo,
+          category: ch.category,
+          seasons: []
+        };
+        seriesMap.set(seriesKey, series);
+      }
+
+      // Get or create season
+      let season = series.seasons.find(s => s.seasonNumber === seriesInfo.season);
+      if (!season) {
+        season = {
+          seasonNumber: seriesInfo.season,
+          episodes: []
+        };
+        series.seasons.push(season);
+      }
+
+      // Add episode
+      season.episodes.push({
+        id: ch.id,
+        episodeNumber: seriesInfo.episode,
+        name: ch.name,
+        hlsUrl: ch.hlsUrl
+      });
+    });
+
+  // Sort seasons and episodes
+  Array.from(seriesMap.values()).forEach(series => {
+    series.seasons.sort((a, b) => a.seasonNumber - b.seasonNumber);
+    series.seasons.forEach(season => {
+      season.episodes.sort((a, b) => a.episodeNumber - b.episodeNumber);
+    });
+  });
+
+  return Array.from(seriesMap.values());
 }
 
 /**

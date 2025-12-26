@@ -1,14 +1,6 @@
-import { parseMultipleM3U8, getDefaultPlaylistUrls } from './utils/m3u8Parser';
+import { parseMultipleM3U8, getDefaultPlaylistUrls, ParsedChannel, ContentType, SeriesInfo } from './utils/m3u8Parser';
 
-export interface Channel {
-  id: string;
-  name: string;
-  logo: string;
-  hlsUrl: string;
-  category?: string;
-  country?: string;
-  groupTitle?: string;
-}
+export interface Channel extends ParsedChannel {}
 
 export const config = {
   port: parseInt(process.env.PORT || '4000'),
@@ -29,7 +21,8 @@ export const config = {
       logo: '/channels/showtv.png',
       hlsUrl: 'https://rmtftbjlne.turknet.ercdn.net/bpeytmnqyp/showtv/showtv_480p.m3u8',
       category: 'Entertainment',
-      country: 'TR'
+      country: 'TR',
+      contentType: 'live' as ContentType
     }
   ] as Channel[],
 

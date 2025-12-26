@@ -1,8 +1,12 @@
-import { getChannels } from '@/lib/channels';
-import { ChannelBrowser } from '@/components/channels/ChannelBrowser';
+import { getMovies, getSeries, getLiveChannels } from '@/lib/channels';
+import { ContentTabs } from '@/components/content/ContentTabs';
 
 export default async function Home() {
-  const channels = await getChannels();
+  const [movies, series, liveChannels] = await Promise.all([
+    getMovies(),
+    getSeries(),
+    getLiveChannels()
+  ]);
 
   return (
     <main className="min-h-screen pb-16">
@@ -29,8 +33,7 @@ export default async function Home() {
 
       {/* Main Content */}
       <div className="container mx-auto px-4 py-8">
-        <h2 className="text-2xl font-semibold text-white mb-6">Kanallar</h2>
-        <ChannelBrowser channels={channels} />
+        <ContentTabs movies={movies} series={series} liveChannels={liveChannels} />
       </div>
 
       {/* Tesla Browser Info */}
