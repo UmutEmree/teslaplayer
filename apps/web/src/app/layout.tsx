@@ -14,6 +14,9 @@ export default function RootLayout({
   return (
     <html lang="tr">
       <head>
+        {/* HLS.js for native HLS playback */}
+        <script src="https://cdn.jsdelivr.net/npm/hls.js@1" defer />
+        {/* JSMpeg (backup for FFmpeg streaming) */}
         <script src="/jsmpeg.min.js" defer />
       </head>
       <body className="min-h-screen bg-tesla-dark">
