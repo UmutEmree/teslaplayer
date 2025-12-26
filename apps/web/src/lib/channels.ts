@@ -2,6 +2,9 @@ export interface Channel {
   id: string;
   name: string;
   logo: string;
+  category?: string;
+  country?: string;
+  groupTitle?: string;
 }
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';

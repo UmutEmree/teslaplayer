@@ -1,7 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import { createServer } from 'http';
-import { config } from './config';
+import { config, initializeChannels } from './config';
 import { streamRouter } from './routes/stream';
 import { channelsRouter } from './routes/channels';
 import { StreamManager } from './services/StreamManager';
@@ -43,9 +43,23 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// Start server
-httpServer.listen(config.port, () => {
-  console.log(`Tesla Player Server running on port ${config.port}`);
-  console.log(`WebSocket enabled on same port (wss://)`);
-  console.log(`CORS: All Vercel domains allowed`);
-});
+// Initialize and start server
+async function startServer() {
+  try {
+    // Load channels from M3U8 playlists
+    await initializeChannels();
+
+    // Start HTTP server
+    httpServer.listen(config.port, () => {
+      console.log(`Tesla Player Server running on port ${config.port}`);
+      console.log(`WebSocket enabled on same port (wss://)`);
+      console.log(`CORS: All Vercel domains allowed`);
+      console.log(`Channels available: ${config.channels.length}`);
+    });
+  } catch (error) {
+    console.error('Failed to start server:', error);
+    process.exit(1);
+  }
+}
+
+startServer();

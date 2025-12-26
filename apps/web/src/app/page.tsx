@@ -1,11 +1,11 @@
 import { getChannels } from '@/lib/channels';
-import { ChannelGrid } from '@/components/channels/ChannelGrid';
+import { ChannelBrowser } from '@/components/channels/ChannelBrowser';
 
 export default async function Home() {
   const channels = await getChannels();
 
   return (
-    <main className="min-h-screen">
+    <main className="min-h-screen pb-16">
       {/* Header */}
       <header className="bg-black/50 backdrop-blur-sm border-b border-white/10">
         <div className="container mx-auto px-4 py-4">
@@ -21,7 +21,7 @@ export default async function Home() {
             </div>
             <div>
               <h1 className="text-xl font-bold text-white">Tesla Player</h1>
-              <p className="text-xs text-gray-400">WebSocket Video Streaming</p>
+              <p className="text-xs text-gray-400">M3U8 Streaming Platform</p>
             </div>
           </div>
         </div>
@@ -30,7 +30,7 @@ export default async function Home() {
       {/* Main Content */}
       <div className="container mx-auto px-4 py-8">
         <h2 className="text-2xl font-semibold text-white mb-6">Kanallar</h2>
-        <ChannelGrid channels={channels} />
+        <ChannelBrowser channels={channels} />
       </div>
 
       {/* Tesla Browser Info */}
