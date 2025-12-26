@@ -45,17 +45,45 @@ export interface Episode {
 /**
  * Parse M3U8 playlist and extract channel information
  * Supports both Xtream Codes format and standard M3U8
+ * Supports both HTTP URLs and local file paths
  */
 export async function parseM3U8(url: string): Promise<ParsedChannel[]> {
   try {
     console.log(`[M3U8Parser] Fetching playlist from: ${url}`);
-    const response = await fetch(url);
 
-    if (!response.ok) {
-      throw new Error(`Failed to fetch M3U8: ${response.status} ${response.statusText}`);
+    let text: string;
+
+    // Check if it's a local file path (absolute, relative, or file:// protocol)
+    const isLocalFile = url.startsWith('file://') ||
+                        url.startsWith('/') ||
+                        url.startsWith('./') ||
+                        url.startsWith('../') ||
+                        url.includes(':\\');
+
+    if (isLocalFile) {
+      // Local file - use fs.readFileSync
+      const fs = await import('fs');
+      const path = await import('path');
+
+      let filePath = url.replace('file://', '');
+
+      // Resolve relative paths from current working directory
+      if (filePath.startsWith('./') || filePath.startsWith('../')) {
+        filePath = path.resolve(process.cwd(), filePath);
+      }
+
+      text = fs.readFileSync(filePath, 'utf-8');
+      console.log(`[M3U8Parser] Loaded local file: ${filePath}`);
+    } else {
+      // HTTP URL - use fetch
+      const response = await fetch(url);
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch M3U8: ${response.status} ${response.statusText}`);
+      }
+
+      text = await response.text();
     }
-
-    const text = await response.text();
     const channels: ParsedChannel[] = [];
     const lines = text.split('\n').map(line => line.trim());
 
@@ -91,16 +119,36 @@ export async function parseM3U8(url: string): Promise<ParsedChannel[]> {
           const id = generateChannelId(channelName, tvgId);
           const category = groupTitle || detectCategory(url, channelName);
 
+          // Extract country from channel name (e.g., "DE: Channel", "UK: Channel", "[PL]")
+          const countryInfo = extractCountryFromName(channelName);
+          const cleanedName = countryInfo.cleanedName;
+
+          // Try multiple sources for country code
+          let country = tvgCountry || countryInfo.country;
+
+          // If no country yet, try extracting from category/groupTitle (e.g., "DE: SPORT")
+          if (!country && groupTitle) {
+            const categoryCountryMatch = groupTitle.match(/^([A-Z]{2}):/);
+            if (categoryCountryMatch) {
+              country = categoryCountryMatch[1];
+            }
+          }
+
+          // Last resort: extract from URL
+          if (!country) {
+            country = extractCountryFromUrl(url);
+          }
+
           // Parse content type and series info
-          const contentInfo = parseContentInfo(channelName, category);
+          const contentInfo = parseContentInfo(cleanedName, category);
 
           channels.push({
             id,
-            name: channelName,
-            logo: tvgLogo || generatePlaceholderLogo(channelName),
+            name: cleanedName,
+            logo: tvgLogo || generatePlaceholderLogo(cleanedName),
             hlsUrl: streamUrl,
             category,
-            country: tvgCountry || extractCountryFromUrl(url),
+            country,
             tvgId,
             groupTitle,
             contentType: contentInfo.contentType,
@@ -132,13 +180,19 @@ export async function parseMultipleM3U8(urls: string[]): Promise<ParsedChannel[]
   const allChannels: ParsedChannel[] = [];
   results.forEach((result, index) => {
     if (result.status === 'fulfilled') {
-      allChannels.push(...result.value);
+      // Concat in chunks to avoid stack overflow with large arrays
+      const channels = result.value;
+      const chunkSize = 1000;
+      for (let i = 0; i < channels.length; i += chunkSize) {
+        allChannels.push(...channels.slice(i, i + chunkSize));
+      }
     } else {
       console.error(`[M3U8Parser] Failed to parse ${urls[index]}:`, result.reason);
     }
   });
 
   // Deduplicate channels by ID
+  console.log(`[M3U8Parser] Deduplicating ${allChannels.length} channels...`);
   const uniqueChannels = deduplicateChannels(allChannels);
   console.log(`[M3U8Parser] Total unique channels: ${uniqueChannels.length}`);
 
@@ -283,6 +337,35 @@ function detectCategory(url: string, channelName: string): string {
 }
 
 /**
+ * Extract country code from channel name
+ * Supports formats: "DE: Channel Name", "UK: Channel Name", "Channel [PL]", "Channel [UK]"
+ */
+function extractCountryFromName(name: string): { country?: string; cleanedName: string } {
+  // Pattern 1: "DE: Channel Name", "UK: Channel Name"
+  const prefixMatch = name.match(/^([A-Z]{2}):\s*(.+)$/);
+  if (prefixMatch) {
+    return {
+      country: prefixMatch[1],
+      cleanedName: prefixMatch[2].trim()
+    };
+  }
+
+  // Pattern 2: "Channel Name [PL]", "Channel Name [UK]"
+  const suffixMatch = name.match(/^(.+?)\s*\[([A-Z]{2})\]$/);
+  if (suffixMatch) {
+    return {
+      country: suffixMatch[2],
+      cleanedName: suffixMatch[1].trim()
+    };
+  }
+
+  // No country code found, return original name
+  return {
+    cleanedName: name
+  };
+}
+
+/**
  * Extract country code from URL
  */
 function extractCountryFromUrl(url: string): string | undefined {
@@ -294,6 +377,11 @@ function extractCountryFromUrl(url: string): string | undefined {
   if (urlLower.includes('/ca.m3u')) return 'CA';
   if (urlLower.includes('/au.m3u')) return 'AU';
   if (urlLower.includes('/vn.m3u')) return 'VN';
+  if (urlLower.includes('/tr.m3u')) return 'TR';
+  if (urlLower.includes('/de.m3u')) return 'DE';
+  if (urlLower.includes('/fr.m3u')) return 'FR';
+  if (urlLower.includes('/es.m3u')) return 'ES';
+  if (urlLower.includes('/it.m3u')) return 'IT';
 
   return undefined;
 }

@@ -30,3 +30,7 @@ npm-debug.log*
 
 # Turbo
 .turbo
+
+# Playlist files (too large for git)
+*.m3u
+*.m3u8
