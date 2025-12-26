@@ -26,7 +26,7 @@ export async function getChannels(): Promise<Channel[]> {
   }
 }
 
-export async function startStream(channelId: string): Promise<{ wsPort: number; viewerCount: number }> {
+export async function startStream(channelId: string): Promise<{ wsPath: string; viewerCount: number }> {
   const res = await fetch(`${API_URL}/api/stream/start`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

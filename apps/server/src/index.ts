@@ -1,11 +1,13 @@
 import express from 'express';
 import cors from 'cors';
+import { createServer } from 'http';
 import { config } from './config';
 import { streamRouter } from './routes/stream';
 import { channelsRouter } from './routes/channels';
 import { StreamManager } from './services/StreamManager';
 
 const app = express();
+export const httpServer = createServer(app);
 
 // Middleware - CORS with Vercel support
 app.use(cors({
@@ -42,8 +44,8 @@ app.get('/health', (req, res) => {
 });
 
 // Start server
-app.listen(config.port, () => {
+httpServer.listen(config.port, () => {
   console.log(`Tesla Player Server running on port ${config.port}`);
-  console.log(`WebSocket base port: ${config.wsBasePort}`);
-  console.log(`CORS origins: ${config.corsOrigins.join(', ')}`);
+  console.log(`WebSocket enabled on same port (wss://)`);
+  console.log(`CORS: All Vercel domains allowed`);
 });

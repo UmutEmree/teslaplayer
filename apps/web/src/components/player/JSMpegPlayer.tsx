@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 
 interface JSMpegPlayerProps {
-  wsPort: number;
+  wsPath: string;
   channelId: string;
 }
 
@@ -47,7 +47,7 @@ interface JSMpegInstance {
   paused: boolean;
 }
 
-export function JSMpegPlayer({ wsPort, channelId }: JSMpegPlayerProps) {
+export function JSMpegPlayer({ wsPath, channelId }: JSMpegPlayerProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const playerRef = useRef<JSMpegInstance | null>(null);
   const [isConnected, setIsConnected] = useState(false);
@@ -55,8 +55,11 @@ export function JSMpegPlayer({ wsPort, channelId }: JSMpegPlayerProps) {
   const [volume, setVolume] = useState(1);
   const [showControls, setShowControls] = useState(true);
 
-  const wsHost = process.env.NEXT_PUBLIC_WS_HOST || 'localhost';
-  const wsUrl = `ws://${wsHost}:${wsPort}`;
+  // Construct WebSocket URL - use wss:// for production, ws:// for localhost
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+  const wsProtocol = apiUrl.startsWith('https') ? 'wss' : 'ws';
+  const wsHost = apiUrl.replace(/^https?:\/\//, '');
+  const wsUrl = `${wsProtocol}://${wsHost}${wsPath}`;
 
   useEffect(() => {
     let mounted = true;

@@ -2,6 +2,7 @@ import { EventEmitter } from 'events';
 import { FFmpegService } from './FFmpegService';
 import { WebSocketRelay } from './WebSocketRelay';
 import { config } from '../config';
+import { httpServer } from '../index';
 
 interface StreamSession {
   id: string;
@@ -14,16 +15,15 @@ interface StreamSession {
 
 export class StreamManager extends EventEmitter {
   private sessions: Map<string, StreamSession> = new Map();
-  private portOffset: number = 0;
 
-  async startStream(channelId: string): Promise<{ wsPort: number; viewerCount: number }> {
+  async startStream(channelId: string): Promise<{ wsPath: string; viewerCount: number }> {
     // Check if stream already exists
     if (this.sessions.has(channelId)) {
       const session = this.sessions.get(channelId)!;
       session.viewerCount++;
       console.log(`[StreamManager] Viewer joined ${channelId}, count: ${session.viewerCount}`);
       return {
-        wsPort: session.wsRelay.port,
+        wsPath: session.wsRelay.path,
         viewerCount: session.viewerCount
       };
     }
@@ -34,15 +34,14 @@ export class StreamManager extends EventEmitter {
       throw new Error(`Channel not found: ${channelId}`);
     }
 
-    // Calculate WebSocket port
-    const wsPort = config.wsBasePort + this.portOffset;
-    this.portOffset++;
+    // WebSocket path for this channel
+    const wsPath = `/stream/${channelId}`;
 
-    console.log(`[StreamManager] Starting stream for ${channelId} on port ${wsPort}`);
+    console.log(`[StreamManager] Starting stream for ${channelId} on path ${wsPath}`);
 
     // Create WebSocket relay
-    const wsRelay = new WebSocketRelay(wsPort);
-    await wsRelay.start();
+    const wsRelay = new WebSocketRelay(wsPath);
+    await wsRelay.start(httpServer);
 
     // Create FFmpeg service
     const ffmpeg = new FFmpegService(channel.hlsUrl);
@@ -77,7 +76,7 @@ export class StreamManager extends EventEmitter {
     this.sessions.set(channelId, session);
 
     return {
-      wsPort,
+      wsPath,
       viewerCount: session.viewerCount
     };
   }
@@ -109,7 +108,7 @@ export class StreamManager extends EventEmitter {
     this.sessions.delete(channelId);
   }
 
-  getStatus(channelId: string): { active: boolean; viewerCount: number; wsPort?: number } {
+  getStatus(channelId: string): { active: boolean; viewerCount: number; wsPath?: string } {
     const session = this.sessions.get(channelId);
     if (!session) {
       return { active: false, viewerCount: 0 };
@@ -117,15 +116,15 @@ export class StreamManager extends EventEmitter {
     return {
       active: true,
       viewerCount: session.viewerCount,
-      wsPort: session.wsRelay.port
+      wsPath: session.wsRelay.path
     };
   }
 
-  getAllSessions(): Array<{ channelId: string; viewerCount: number; wsPort: number; createdAt: Date }> {
+  getAllSessions(): Array<{ channelId: string; viewerCount: number; wsPath: string; createdAt: Date }> {
     return Array.from(this.sessions.values()).map(s => ({
       channelId: s.channelId,
       viewerCount: s.viewerCount,
-      wsPort: s.wsRelay.port,
+      wsPath: s.wsRelay.path,
       createdAt: s.createdAt
     }));
   }

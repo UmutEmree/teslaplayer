@@ -1,29 +1,33 @@
 import { WebSocketServer, WebSocket } from 'ws';
 import { EventEmitter } from 'events';
+import { Server as HTTPServer } from 'http';
 
 const STREAM_MAGIC_BYTES = 'jsmp';
 
 export class WebSocketRelay extends EventEmitter {
   private wss: WebSocketServer | null = null;
   private clients: Set<WebSocket> = new Set();
-  public port: number;
+  public path: string;
   private width: number;
   private height: number;
 
-  constructor(port: number, width = 960, height = 540) {
+  constructor(path: string, width = 640, height = 360) {
     super();
-    this.port = port;
+    this.path = path;
     this.width = width;
     this.height = height;
   }
 
-  start(): Promise<void> {
+  start(httpServer: HTTPServer): Promise<void> {
     return new Promise((resolve, reject) => {
       try {
-        this.wss = new WebSocketServer({ port: this.port });
+        this.wss = new WebSocketServer({
+          server: httpServer,
+          path: this.path
+        });
 
         this.wss.on('connection', (ws: WebSocket) => {
-          console.log(`[WebSocket] Client connected on port ${this.port}`);
+          console.log(`[WebSocket] Client connected on path ${this.path}`);
           this.clients.add(ws);
 
           // Send JSMpeg header
@@ -36,7 +40,7 @@ export class WebSocketRelay extends EventEmitter {
           this.emit('viewer:connect', this.clients.size);
 
           ws.on('close', () => {
-            console.log(`[WebSocket] Client disconnected from port ${this.port}`);
+            console.log(`[WebSocket] Client disconnected from path ${this.path}`);
             this.clients.delete(ws);
             this.emit('viewer:disconnect', this.clients.size);
           });
@@ -47,15 +51,13 @@ export class WebSocketRelay extends EventEmitter {
           });
         });
 
-        this.wss.on('listening', () => {
-          console.log(`[WebSocket] Server listening on port ${this.port}`);
-          resolve();
-        });
-
         this.wss.on('error', (error) => {
           console.error('[WebSocket] Server error:', error);
           reject(error);
         });
+
+        console.log(`[WebSocket] Server ready on path ${this.path}`);
+        resolve();
       } catch (error) {
         reject(error);
       }
@@ -80,7 +82,7 @@ export class WebSocketRelay extends EventEmitter {
       this.wss.close();
       this.wss = null;
     }
-    console.log(`[WebSocket] Server stopped on port ${this.port}`);
+    console.log(`[WebSocket] Server stopped on path ${this.path}`);
   }
 
   getViewerCount(): number {

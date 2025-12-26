@@ -13,14 +13,14 @@ type PlayerState = 'loading' | 'unlocking' | 'playing' | 'error';
 
 export function VideoPlayer({ channelId }: VideoPlayerProps) {
   const [state, setState] = useState<PlayerState>('unlocking');
-  const [wsPort, setWsPort] = useState<number | null>(null);
+  const [wsPath, setWsPath] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const initStream = async () => {
     try {
       setState('loading');
       const result = await startStream(channelId);
-      setWsPort(result.wsPort);
+      setWsPath(result.wsPath);
       setState('playing');
     } catch (err) {
       console.error('Failed to start stream:', err);
@@ -57,8 +57,8 @@ export function VideoPlayer({ channelId }: VideoPlayerProps) {
       )}
 
       {/* Player */}
-      {state === 'playing' && wsPort && (
-        <JSMpegPlayer wsPort={wsPort} channelId={channelId} />
+      {state === 'playing' && wsPath && (
+        <JSMpegPlayer wsPath={wsPath} channelId={channelId} />
       )}
 
       {/* Error State */}
