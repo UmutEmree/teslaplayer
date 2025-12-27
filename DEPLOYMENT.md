@@ -40,12 +40,13 @@
    ```
    NODE_ENV=production
    PORT=4000
-   M3U8_URLS=https://raw.githubusercontent.com/Free-IPTV/Countries/main/TR01_TURKEY.m3u8,https://iptv-org.github.io/iptv/countries/tr.m3u8
    USE_M3U8=true
-   CORS_ORIGINS=https://teslaplayer.vercel.app
+   CORS_ORIGINS=https://teslaplayer.vercel.app,https://teslaplayer-*.vercel.app
    ```
 
-   **Not**: `CORS_ORIGINS` değerini Vercel URL'iniz ile güncelleyin!
+   **Not**:
+   - `CORS_ORIGINS` değerini Vercel URL'iniz ile güncelleyin!
+   - M3U8_URLS eklemeyin - kod içinde default Xtream Codes URL zaten mevcut (49K+ kanal)
 
 6. **Create Web Service** butonuna tıklayın
 
