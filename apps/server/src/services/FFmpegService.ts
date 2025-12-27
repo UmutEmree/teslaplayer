@@ -17,17 +17,17 @@ export class FFmpegService extends EventEmitter {
       '-re',
       '-i', this.hlsUrl,
 
-      // Video encoding - MPEG1 for JSMpeg (quality-based)
+      // Video encoding - MPEG1 for JSMpeg (720p @ 30fps)
       '-c:v', 'mpeg1video',
-      '-q:v', '8',
-      '-s', '640x360',
-      '-r', '24',
+      '-b:v', '2500k',
+      '-s', '1280x720',
+      '-r', '30',
 
-      // Audio encoding - MP2 for JSMpeg
+      // Audio encoding - MP2 for JSMpeg (Stereo)
       '-c:a', 'mp2',
       '-ar', '44100',
-      '-ac', '1',
-      '-b:a', '128k',
+      '-ac', '2',
+      '-b:a', '160k',
 
       // Output format - MPEG-TS
       '-f', 'mpegts',

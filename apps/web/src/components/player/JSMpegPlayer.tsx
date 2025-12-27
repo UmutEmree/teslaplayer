@@ -91,10 +91,10 @@ export function JSMpegPlayer({ wsPath, channelId }: JSMpegPlayerProps) {
           preserveDrawingBuffer: false,
           progressive: true,
           throttled: true,
-          chunkSize: 1024 * 1024,
+          chunkSize: 2 * 1024 * 1024,
           maxAudioLag: 0.5,
-          videoBufferSize: 1024 * 1024,
-          audioBufferSize: 128 * 1024,
+          videoBufferSize: 4 * 1024 * 1024,
+          audioBufferSize: 256 * 1024,
           onSourceEstablished: () => {
             console.log('[JSMpeg] Source established');
             if (mounted) {
