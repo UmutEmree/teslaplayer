@@ -13,15 +13,14 @@ export class FFmpegService extends EventEmitter {
 
   start(): void {
     const args = [
-      // Input options
-      '-re',
+      // Input options (removed -re for faster processing)
       '-i', this.hlsUrl,
 
-      // Video encoding - MPEG1 for JSMpeg (720p @ 30fps)
+      // Video encoding - MPEG1 for JSMpeg (720p @ 60fps)
       '-c:v', 'mpeg1video',
-      '-b:v', '2500k',
+      '-b:v', '3500k',
       '-s', '1280x720',
-      '-r', '30',
+      '-r', '60',
 
       // Audio encoding - MP2 for JSMpeg (Stereo)
       '-c:a', 'mp2',
