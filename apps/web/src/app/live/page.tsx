@@ -67,7 +67,15 @@ export default function LivePage() {
     channels
       .filter(c => (c.country || 'Diğer') === selectedCountry)
       .forEach(c => {
-        const category = c.category || 'Genel';
+        let category = c.category || 'Genel';
+
+        // Strip country prefix from category name if present
+        // Pattern: "TR: RADYO" -> "RADYO", "DE: SPORT" -> "SPORT"
+        const prefixMatch = category.match(/^[A-Z]{2,}:\s*(.+)$/);
+        if (prefixMatch) {
+          category = prefixMatch[1];
+        }
+
         categoriesMap.set(category, (categoriesMap.get(category) || 0) + 1);
       });
   }
@@ -81,7 +89,15 @@ export default function LivePage() {
     if (viewMode !== 'channels') return false;
 
     const matchesCountry = (c.country || 'Diğer') === selectedCountry;
-    const matchesCategory = c.category === selectedCategory;
+
+    // Strip prefix from category for comparison
+    let channelCategory = c.category || 'Genel';
+    const prefixMatch = channelCategory.match(/^[A-Z]{2,}:\s*(.+)$/);
+    if (prefixMatch) {
+      channelCategory = prefixMatch[1];
+    }
+
+    const matchesCategory = channelCategory === selectedCategory;
     const matchesSearch = searchQuery === '' ||
       c.name.toLowerCase().includes(searchQuery.toLowerCase());
 
