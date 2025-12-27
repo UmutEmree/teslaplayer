@@ -13,41 +13,37 @@ export class FFmpegService extends EventEmitter {
 
   start(): void {
     const args = [
-      // Input options - optimized for HLS live streams
-      '-fflags', '+genpts+discardcorrupt+igndts',
+      // Input options - HLS live stream with realtime pacing
+      '-re',                      // Read input at realtime (native frame rate)
+      '-fflags', '+genpts+discardcorrupt',
       '-flags', 'low_delay',
-      '-avioflags', 'direct',
-      '-rtbufsize', '32M',
-      '-thread_queue_size', '512',
-      '-analyzeduration', '2000000',
-      '-probesize', '2000000',
+      '-live_start_index', '-3',  // Start from 3rd most recent segment
+      '-rw_timeout', '5000000',   // 5 second timeout
+      '-analyzeduration', '3000000',
+      '-probesize', '3000000',
       '-i', this.hlsUrl,
 
       // Video encoding - MPEG1 for JSMpeg
       '-c:v', 'mpeg1video',
       '-b:v', '2000k',
-      '-maxrate', '2000k',
-      '-bufsize', '2000k',        // Same as bitrate for consistent output
       '-s', '1280x720',
       '-r', '25',
-      '-g', '25',
+      '-g', '50',                 // Keyframe every 2 seconds
       '-bf', '0',
-      '-threads', '4',
-      '-vsync', 'vfr',            // Variable frame rate - follows source timing
-      '-frame_drop_threshold', '1.0',
-      '-max_muxing_queue_size', '1024',
+      '-threads', '2',
+      '-q:v', '3',                // Quality level (lower = better)
+      '-vsync', 'cfr',            // Constant frame rate output
+      '-max_muxing_queue_size', '512',
 
-      // Audio encoding - MP2 for JSMpeg with resample filter
-      '-af', 'aresample=async=1000:first_pts=0',  // Smooth audio sync
+      // Audio encoding - MP2 for JSMpeg
       '-c:a', 'mp2',
       '-ar', '44100',
       '-ac', '2',
       '-b:a', '128k',
 
-      // Output format - MPEG-TS
+      // Output format - MPEG-TS realtime
       '-f', 'mpegts',
-      '-muxdelay', '0',
-      '-muxpreload', '0',
+      '-mpegts_flags', '+resend_headers',
       '-flush_packets', '1',
 
       // Output to stdout
