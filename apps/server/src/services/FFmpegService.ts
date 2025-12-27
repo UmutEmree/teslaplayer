@@ -14,11 +14,12 @@ export class FFmpegService extends EventEmitter {
   start(): void {
     const args = [
       // Input options - streaming optimizations
-      '-fflags', '+genpts+discardcorrupt',
+      '-fflags', '+genpts+discardcorrupt+nobuffer',
       '-flags', 'low_delay',
       '-strict', 'experimental',
       '-analyzeduration', '1000000',
       '-probesize', '1000000',
+      '-re',                // Read input at native frame rate (prevents fast playback)
       '-i', this.hlsUrl,
 
       // Video encoding - MPEG1 for JSMpeg (720p @ 30fps - high quality for dedicated server)
@@ -29,12 +30,15 @@ export class FFmpegService extends EventEmitter {
       '-g', '30',           // Keyframe every 30 frames (1 sec)
       '-bf', '0',           // No B-frames for lower latency
       '-threads', '4',      // Use multiple threads
+      '-vsync', 'cfr',      // Constant frame rate - prevents speed fluctuations
+      '-max_muxing_queue_size', '1024',
 
       // Audio encoding - MP2 for JSMpeg (Stereo)
       '-c:a', 'mp2',
       '-ar', '44100',
       '-ac', '2',
       '-b:a', '128k',
+      '-async', '1',        // Audio sync - prevents drift
 
       // Output format - MPEG-TS with flush
       '-f', 'mpegts',
