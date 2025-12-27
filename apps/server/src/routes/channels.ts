@@ -8,7 +8,11 @@ channelsRouter.get('/', (req: Request, res: Response) => {
   const channels = config.channels.map(c => ({
     id: c.id,
     name: c.name,
-    logo: c.logo
+    logo: c.logo,
+    hlsUrl: c.hlsUrl,
+    category: c.category,
+    country: c.country,
+    contentType: c.contentType
   }));
   res.json(channels);
 });
@@ -24,6 +28,10 @@ channelsRouter.get('/:id', (req: Request, res: Response) => {
   res.json({
     id: channel.id,
     name: channel.name,
-    logo: channel.logo
+    logo: channel.logo,
+    hlsUrl: channel.hlsUrl,
+    category: channel.category,
+    country: channel.country,
+    contentType: channel.contentType
   });
 });

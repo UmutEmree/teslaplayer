@@ -126,7 +126,7 @@ export default function LivePage() {
   };
 
   const handleChannelClick = (channel: Channel) => {
-    router.push(`/player/${channel.id}`);
+    router.push(`/watch/${channel.id}`);
   };
 
   if (loading) {

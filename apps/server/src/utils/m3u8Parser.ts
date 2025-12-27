@@ -126,6 +126,14 @@ export async function parseM3U8(url: string): Promise<ParsedChannel[]> {
           // Try multiple sources for country code
           let country = tvgCountry || countryInfo.country;
 
+          // If no country yet, try extracting from tvg-id (e.g., "TRT1.tr" → "TR")
+          if (!country && tvgId) {
+            const tvgIdMatch = tvgId.match(/\.([a-z]{2})$/i);
+            if (tvgIdMatch) {
+              country = tvgIdMatch[1].toUpperCase();
+            }
+          }
+
           // If no country yet, try extracting from category/groupTitle (e.g., "DE: SPORT")
           if (!country && groupTitle) {
             const categoryCountryMatch = groupTitle.match(/^([A-Z]{2}):/);
@@ -140,7 +148,7 @@ export async function parseM3U8(url: string): Promise<ParsedChannel[]> {
           }
 
           // Parse content type and series info
-          const contentInfo = parseContentInfo(cleanedName, category);
+          const contentInfo = parseContentInfo(cleanedName, category, tvgId);
 
           channels.push({
             id,
@@ -202,7 +210,7 @@ export async function parseMultipleM3U8(urls: string[]): Promise<ParsedChannel[]
 /**
  * Parse content type and series information from channel name and group title
  */
-function parseContentInfo(name: string, groupTitle: string): {
+function parseContentInfo(name: string, groupTitle: string, tvgId?: string): {
   contentType: ContentType;
   seriesInfo?: SeriesInfo;
   year?: number;
@@ -210,14 +218,28 @@ function parseContentInfo(name: string, groupTitle: string): {
   const groupLower = groupTitle.toLowerCase();
   const nameLower = name.toLowerCase();
 
-  // 1. Check for live TV first (highest priority for country-coded channels)
+  // 1. Check tvg-id for country extension (e.g., ".tr", ".de") - indicates live TV
+  if (tvgId && /\.[a-z]{2}$/i.test(tvgId)) {
+    return { contentType: 'live' };
+  }
+
+  // 2. Check for live TV first (highest priority for country-coded channels)
   // Country code pattern like "DE: ", "FR: ", "ALB: ", "EX-YU: " always indicates live TV
   if (/^[A-Z][A-Z-]+:\s/.test(groupTitle)) {
     return { contentType: 'live' };
   }
 
-  // 2. Check for special symbols used for live channels
+  // 3. Check for special symbols used for live channels
   if (groupTitle.includes('▰') || groupTitle.includes('▱')) {
+    return { contentType: 'live' };
+  }
+
+  // 4. Check for Turkish live TV categories
+  const turkishLiveCategories = [
+    'ulusal', 'haber', 'spor', 'muzik', 'cocuk', 'dini', 'ekonomi', 'belgesel',
+    'yurt disi', 'eglence', 'yerel'
+  ];
+  if (turkishLiveCategories.some(cat => groupLower.includes(cat))) {
     return { contentType: 'live' };
   }
 
@@ -287,7 +309,7 @@ function parseContentInfo(name: string, groupTitle: string): {
     'ulusal', 'yerel', 'bölgesel', 'national', 'local', 'regional', 'raw', 'türk',
     'unterhaltung', 'entertainment', 'music', 'musikk', 'documentary', 'dokumentar',
     'kids', 'femije', 'cocuk', 'fetare', 'religion', 'radio', 'premium', 'cinema',
-    'amazon', 'netflix', 'event'  // Streaming platforms with live events
+    'amazon', 'netflix', 'event', 'general', 'haber'  // Streaming platforms with live events + general category
   ];
 
   // Check if it's a region/country code without colon (e.g., "EX-YU", "ARAB", "BALKAN")
@@ -512,10 +534,11 @@ export function groupSeries(channels: ParsedChannel[]): Series[] {
 
 /**
  * Get predefined playlist URLs
- * Default: Xtream Codes API endpoint
+ * Default: Local Turkish IPTV playlist
  */
 export function getDefaultPlaylistUrls(): string[] {
-  return [
-    'http://5gumutemre.bob7g.xyz:8080/get.php?username=5gumutemre&password=bdeSDF6gjng53r21&type=m3u_plus&output=mpegts'
-  ];
+  // Use relative path from this file to the M3U file in server root
+  const path = require('path');
+  const localPlaylist = path.join(__dirname, '..', '..', 'ByteFixRepairsTurkIPTV.m3u');
+  return [localPlaylist];
 }
