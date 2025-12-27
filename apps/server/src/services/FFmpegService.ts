@@ -13,35 +13,41 @@ export class FFmpegService extends EventEmitter {
 
   start(): void {
     const args = [
-      // Input options - streaming optimizations
-      '-fflags', '+genpts+discardcorrupt+nobuffer',
+      // Input options - optimized for HLS live streams
+      '-fflags', '+genpts+discardcorrupt+igndts',
       '-flags', 'low_delay',
-      '-strict', 'experimental',
-      '-analyzeduration', '1000000',
-      '-probesize', '1000000',
-      '-re',                // Read input at native frame rate (prevents fast playback)
+      '-avioflags', 'direct',
+      '-rtbufsize', '32M',
+      '-thread_queue_size', '512',
+      '-analyzeduration', '2000000',
+      '-probesize', '2000000',
       '-i', this.hlsUrl,
 
-      // Video encoding - MPEG1 for JSMpeg (720p @ 30fps - high quality for dedicated server)
+      // Video encoding - MPEG1 for JSMpeg
       '-c:v', 'mpeg1video',
-      '-b:v', '3000k',
+      '-b:v', '2500k',
+      '-maxrate', '2500k',
+      '-bufsize', '5000k',
       '-s', '1280x720',
-      '-r', '30',
-      '-g', '30',           // Keyframe every 30 frames (1 sec)
-      '-bf', '0',           // No B-frames for lower latency
-      '-threads', '4',      // Use multiple threads
-      '-vsync', 'cfr',      // Constant frame rate - prevents speed fluctuations
-      '-max_muxing_queue_size', '1024',
+      '-r', '25',
+      '-g', '25',
+      '-bf', '0',
+      '-threads', '4',
+      '-vsync', 'passthrough',
+      '-copyts',
+      '-start_at_zero',
+      '-max_muxing_queue_size', '2048',
 
-      // Audio encoding - MP2 for JSMpeg (Stereo)
+      // Audio encoding - MP2 for JSMpeg
       '-c:a', 'mp2',
       '-ar', '44100',
       '-ac', '2',
       '-b:a', '128k',
-      '-async', '1',        // Audio sync - prevents drift
 
-      // Output format - MPEG-TS with flush
+      // Output format - MPEG-TS
       '-f', 'mpegts',
+      '-muxdelay', '0',
+      '-muxpreload', '0',
       '-flush_packets', '1',
 
       // Output to stdout
