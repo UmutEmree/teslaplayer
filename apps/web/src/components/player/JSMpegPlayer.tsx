@@ -89,12 +89,12 @@ export function JSMpegPlayer({ wsPath, channelId }: JSMpegPlayerProps) {
           pauseWhenHidden: false,
           disableGl: false,
           preserveDrawingBuffer: false,
-          progressive: false,         // Disable progressive - prevents speed fluctuation
-          throttled: false,           // Disable throttling - play at natural rate
-          chunkSize: 128 * 1024,      // Smaller chunks for smoother playback
-          maxAudioLag: 2,             // Allow more audio lag before correction
-          videoBufferSize: 512 * 1024,  // Smaller buffer prevents catch-up behavior
-          audioBufferSize: 128 * 1024,
+          progressive: true,          // Enable progressive for buffered playback
+          throttled: true,            // Let JSMpeg handle timing
+          chunkSize: 1024 * 1024,     // 1MB chunks
+          maxAudioLag: 0.25,          // Tighter audio sync (server handles throttling)
+          videoBufferSize: 2 * 1024 * 1024,  // 2MB video buffer
+          audioBufferSize: 512 * 1024,       // 512KB audio buffer
           onSourceEstablished: () => {
             console.log('[JSMpeg] Source established');
             if (mounted) {
