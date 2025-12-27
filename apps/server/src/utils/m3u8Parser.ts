@@ -19,6 +19,7 @@ export interface ParsedChannel {
   contentType: ContentType;
   seriesInfo?: SeriesInfo;
   year?: number;
+  isDirectVideo?: boolean; // true for direct video files (mkv, mp4), false for HLS
 }
 
 export interface Series {
@@ -530,6 +531,274 @@ export function groupSeries(channels: ParsedChannel[]): Series[] {
   });
 
   return Array.from(seriesMap.values());
+}
+
+/**
+ * Xtream Codes API Configuration
+ */
+export interface XtreamConfig {
+  server: string;
+  username: string;
+  password: string;
+}
+
+interface XtreamCategory {
+  category_id: string;
+  category_name: string;
+  parent_id: number;
+}
+
+interface XtreamStream {
+  num: number;
+  name: string;
+  stream_type: string;
+  stream_id: number;
+  stream_icon: string;
+  epg_channel_id: string | null;
+  added: string;
+  category_id: string;
+  custom_sid: string;
+  tv_archive: number;
+  direct_source: string;
+  tv_archive_duration: number;
+}
+
+interface XtreamVodStream {
+  num: number;
+  name: string;
+  stream_type: string;
+  stream_id: number;
+  stream_icon: string;
+  rating: string;
+  rating_5based: number;
+  added: string;
+  category_id: string;
+  container_extension: string;
+  custom_sid: string;
+  direct_source: string;
+}
+
+interface XtreamSeriesStream {
+  num: number;
+  name: string;
+  series_id: number;
+  cover: string;
+  plot: string;
+  cast: string;
+  director: string;
+  genre: string;
+  release_date: string;
+  last_modified: string;
+  rating: string;
+  rating_5based: number;
+  backdrop_path: string[];
+  youtube_trailer: string;
+  episode_run_time: string;
+  category_id: string;
+}
+
+/**
+ * Default Xtream Codes API configuration
+ */
+export function getDefaultXtreamConfig(): XtreamConfig {
+  return {
+    server: 'http://m3u.best-smarter.me',
+    username: '2b9dbfe35aa1',
+    password: '1a292b87b3'
+  };
+}
+
+/**
+ * Fetch channels from Xtream Codes API
+ */
+export async function parseXtreamCodes(config: XtreamConfig): Promise<ParsedChannel[]> {
+  try {
+    console.log(`[XtreamCodes] Fetching from: ${config.server}`);
+
+    const baseUrl = `${config.server}/player_api.php?username=${config.username}&password=${config.password}`;
+
+    // Fetch categories and streams in parallel
+    const [categoriesRes, streamsRes] = await Promise.all([
+      fetch(`${baseUrl}&action=get_live_categories`),
+      fetch(`${baseUrl}&action=get_live_streams`)
+    ]);
+
+    if (!categoriesRes.ok || !streamsRes.ok) {
+      throw new Error('Failed to fetch from Xtream Codes API');
+    }
+
+    const categories = await categoriesRes.json() as XtreamCategory[];
+    const streams = await streamsRes.json() as XtreamStream[];
+
+    console.log(`[XtreamCodes] Found ${categories.length} categories, ${streams.length} streams`);
+
+    // Create category map
+    const categoryMap = new Map<string, string>();
+    categories.forEach(cat => {
+      categoryMap.set(cat.category_id, cat.category_name);
+    });
+
+    // Convert streams to ParsedChannel format
+    const channels: ParsedChannel[] = streams.map(stream => {
+      const categoryName = categoryMap.get(stream.category_id) || 'General';
+      const countryInfo = extractCountryFromCategory(categoryName);
+
+      // Build stream URL - use original URL, frontend will use proxy
+      const originalUrl = `${config.server}/live/${config.username}/${config.password}/${stream.stream_id}.m3u8`;
+      // Store original URL - frontend will construct full proxy URL with its API base
+      const proxyUrl = originalUrl;
+
+      return {
+        id: `xtream-${stream.stream_id}`,
+        name: stream.name,
+        logo: stream.stream_icon || '',
+        hlsUrl: proxyUrl,
+        category: categoryName,
+        country: countryInfo.country,
+        tvgId: stream.epg_channel_id || undefined,
+        groupTitle: categoryName,
+        contentType: 'live' as ContentType
+      };
+    });
+
+    console.log(`[XtreamCodes] Parsed ${channels.length} channels`);
+    return channels;
+  } catch (error) {
+    console.error('[XtreamCodes] Error:', error);
+    return [];
+  }
+}
+
+/**
+ * Fetch VOD (movies) from Xtream Codes API
+ */
+export async function parseXtreamVod(config: XtreamConfig): Promise<ParsedChannel[]> {
+  try {
+    console.log(`[XtreamCodes] Fetching VOD from: ${config.server}`);
+
+    const baseUrl = `${config.server}/player_api.php?username=${config.username}&password=${config.password}`;
+
+    const [categoriesRes, streamsRes] = await Promise.all([
+      fetch(`${baseUrl}&action=get_vod_categories`),
+      fetch(`${baseUrl}&action=get_vod_streams`)
+    ]);
+
+    if (!categoriesRes.ok || !streamsRes.ok) {
+      throw new Error('Failed to fetch VOD from Xtream Codes API');
+    }
+
+    const categories = await categoriesRes.json() as XtreamCategory[];
+    const streams = await streamsRes.json() as XtreamVodStream[];
+
+    console.log(`[XtreamCodes] Found ${categories.length} VOD categories, ${streams.length} VOD streams`);
+
+    const categoryMap = new Map<string, string>();
+    categories.forEach(cat => {
+      categoryMap.set(cat.category_id, cat.category_name);
+    });
+
+    const channels: ParsedChannel[] = streams.map(stream => {
+      const categoryName = categoryMap.get(stream.category_id) || 'Movies';
+
+      // Extract year from name if present
+      const yearMatch = stream.name.match(/\((\d{4})\)/);
+      const year = yearMatch ? parseInt(yearMatch[1]) : undefined;
+
+      // Build VOD URL - use container_extension for direct video (Xtream doesn't support HLS for VOD)
+      const extension = stream.container_extension || 'mkv';
+      const streamUrl = `${config.server}/movie/${config.username}/${config.password}/${stream.stream_id}.${extension}`;
+
+      return {
+        id: `vod-${stream.stream_id}`,
+        name: stream.name,
+        logo: stream.stream_icon || '',
+        hlsUrl: streamUrl,
+        category: categoryName,
+        groupTitle: categoryName,
+        contentType: 'movie' as ContentType,
+        year,
+        isDirectVideo: true // Flag for frontend to use video-proxy instead of hls-proxy
+      };
+    });
+
+    console.log(`[XtreamCodes] Parsed ${channels.length} VOD items`);
+    return channels;
+  } catch (error) {
+    console.error('[XtreamCodes] VOD Error:', error);
+    return [];
+  }
+}
+
+/**
+ * Fetch Series from Xtream Codes API
+ */
+export async function parseXtreamSeries(config: XtreamConfig): Promise<ParsedChannel[]> {
+  try {
+    console.log(`[XtreamCodes] Fetching Series from: ${config.server}`);
+
+    const baseUrl = `${config.server}/player_api.php?username=${config.username}&password=${config.password}`;
+
+    const [categoriesRes, seriesRes] = await Promise.all([
+      fetch(`${baseUrl}&action=get_series_categories`),
+      fetch(`${baseUrl}&action=get_series`)
+    ]);
+
+    if (!categoriesRes.ok || !seriesRes.ok) {
+      throw new Error('Failed to fetch Series from Xtream Codes API');
+    }
+
+    const categories = await categoriesRes.json() as XtreamCategory[];
+    const series = await seriesRes.json() as XtreamSeriesStream[];
+
+    console.log(`[XtreamCodes] Found ${categories.length} Series categories, ${series.length} series`);
+
+    const categoryMap = new Map<string, string>();
+    categories.forEach(cat => {
+      categoryMap.set(cat.category_id, cat.category_name);
+    });
+
+    // For series, we create a placeholder entry - episodes would need to be fetched per series
+    const channels: ParsedChannel[] = series.map(s => {
+      const categoryName = categoryMap.get(s.category_id) || 'Series';
+
+      // Extract year from release date
+      const yearMatch = s.release_date?.match(/(\d{4})/);
+      const year = yearMatch ? parseInt(yearMatch[1]) : undefined;
+
+      return {
+        id: `series-${s.series_id}`,
+        name: s.name,
+        logo: s.cover || '',
+        hlsUrl: '', // Series need episode selection
+        category: categoryName,
+        groupTitle: categoryName,
+        contentType: 'series' as ContentType,
+        year,
+        seriesInfo: {
+          seriesName: s.name,
+          season: 1,
+          episode: 1
+        }
+      };
+    });
+
+    console.log(`[XtreamCodes] Parsed ${channels.length} series`);
+    return channels;
+  } catch (error) {
+    console.error('[XtreamCodes] Series Error:', error);
+    return [];
+  }
+}
+
+/**
+ * Extract country code from category name (e.g., "UK| GENERAL" → "UK")
+ */
+function extractCountryFromCategory(categoryName: string): { country?: string } {
+  const match = categoryName.match(/^([A-Z]{2})\|/);
+  if (match) {
+    return { country: match[1] };
+  }
+  return {};
 }
 
 /**

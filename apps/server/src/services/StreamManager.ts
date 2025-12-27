@@ -16,35 +16,58 @@ interface StreamSession {
 export class StreamManager extends EventEmitter {
   private sessions: Map<string, StreamSession> = new Map();
 
-  async startStream(channelId: string): Promise<{ wsPath: string; viewerCount: number }> {
+  // Simple hash function for URL to create unique session keys
+  private hashUrl(url: string): string {
+    let hash = 0;
+    for (let i = 0; i < url.length; i++) {
+      const char = url.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash; // Convert to 32bit integer
+    }
+    return Math.abs(hash).toString(36);
+  }
+
+  async startStream(channelId: string, directUrl?: string): Promise<{ wsPath: string; viewerCount: number }> {
+    // Use a unique session key - for VOD with URL, include a hash of the URL
+    const sessionKey = directUrl ? `vod_${this.hashUrl(directUrl)}` : channelId;
+
     // Check if stream already exists
-    if (this.sessions.has(channelId)) {
-      const session = this.sessions.get(channelId)!;
+    if (this.sessions.has(sessionKey)) {
+      const session = this.sessions.get(sessionKey)!;
       session.viewerCount++;
-      console.log(`[StreamManager] Viewer joined ${channelId}, count: ${session.viewerCount}`);
+      console.log(`[StreamManager] Viewer joined ${sessionKey}, count: ${session.viewerCount}`);
       return {
         wsPath: session.wsRelay.path,
         viewerCount: session.viewerCount
       };
     }
 
-    // Find channel
-    const channel = config.channels.find(c => c.id === channelId);
-    if (!channel) {
-      throw new Error(`Channel not found: ${channelId}`);
+    let streamUrl: string;
+
+    // If directUrl is provided, use it (for VOD content)
+    if (directUrl) {
+      streamUrl = directUrl;
+      console.log(`[StreamManager] Using direct URL for VOD: ${directUrl}`);
+    } else {
+      // Find channel from config (for live TV)
+      const channel = config.channels.find(c => c.id === channelId);
+      if (!channel) {
+        throw new Error(`Channel not found: ${channelId}`);
+      }
+      streamUrl = channel.hlsUrl;
     }
 
-    // WebSocket path for this channel
-    const wsPath = `/stream/${channelId}`;
+    // WebSocket path for this stream
+    const wsPath = `/stream/${sessionKey}`;
 
-    console.log(`[StreamManager] Starting stream for ${channelId} on path ${wsPath}`);
+    console.log(`[StreamManager] Starting stream for ${sessionKey} on path ${wsPath}`);
 
     // Create WebSocket relay
     const wsRelay = new WebSocketRelay(wsPath);
     await wsRelay.start(httpServer);
 
     // Create FFmpeg service
-    const ffmpeg = new FFmpegService(channel.hlsUrl);
+    const ffmpeg = new FFmpegService(streamUrl);
 
     // Pipe FFmpeg output to WebSocket
     ffmpeg.on('data', (data: Buffer) => {
@@ -52,12 +75,12 @@ export class StreamManager extends EventEmitter {
     });
 
     ffmpeg.on('close', () => {
-      console.log(`[StreamManager] FFmpeg closed for ${channelId}`);
-      this.cleanupSession(channelId);
+      console.log(`[StreamManager] FFmpeg closed for ${sessionKey}`);
+      this.cleanupSession(sessionKey);
     });
 
     ffmpeg.on('error', (error) => {
-      console.error(`[StreamManager] FFmpeg error for ${channelId}:`, error);
+      console.error(`[StreamManager] FFmpeg error for ${sessionKey}:`, error);
     });
 
     // Start FFmpeg
@@ -65,15 +88,15 @@ export class StreamManager extends EventEmitter {
 
     // Create session
     const session: StreamSession = {
-      id: `${channelId}-${Date.now()}`,
-      channelId,
+      id: `${sessionKey}-${Date.now()}`,
+      channelId: sessionKey,
       ffmpeg,
       wsRelay,
       viewerCount: 1,
       createdAt: new Date()
     };
 
-    this.sessions.set(channelId, session);
+    this.sessions.set(sessionKey, session);
 
     return {
       wsPath,
@@ -81,35 +104,37 @@ export class StreamManager extends EventEmitter {
     };
   }
 
-  async stopStream(channelId: string): Promise<void> {
-    const session = this.sessions.get(channelId);
+  async stopStream(channelId: string, directUrl?: string): Promise<void> {
+    const sessionKey = directUrl ? `vod_${this.hashUrl(directUrl)}` : channelId;
+    const session = this.sessions.get(sessionKey);
     if (!session) {
-      console.log(`[StreamManager] No session found for ${channelId}`);
+      console.log(`[StreamManager] No session found for ${sessionKey}`);
       return;
     }
 
     session.viewerCount--;
-    console.log(`[StreamManager] Viewer left ${channelId}, count: ${session.viewerCount}`);
+    console.log(`[StreamManager] Viewer left ${sessionKey}, count: ${session.viewerCount}`);
 
     // Cleanup if no viewers
     if (session.viewerCount <= 0) {
-      this.cleanupSession(channelId);
+      this.cleanupSession(sessionKey);
     }
   }
 
-  private cleanupSession(channelId: string): void {
-    const session = this.sessions.get(channelId);
+  private cleanupSession(sessionKey: string): void {
+    const session = this.sessions.get(sessionKey);
     if (!session) return;
 
-    console.log(`[StreamManager] Cleaning up session for ${channelId}`);
+    console.log(`[StreamManager] Cleaning up session for ${sessionKey}`);
 
     session.ffmpeg.stop();
     session.wsRelay.stop();
-    this.sessions.delete(channelId);
+    this.sessions.delete(sessionKey);
   }
 
-  getStatus(channelId: string): { active: boolean; viewerCount: number; wsPath?: string } {
-    const session = this.sessions.get(channelId);
+  getStatus(channelId: string, directUrl?: string): { active: boolean; viewerCount: number; wsPath?: string } {
+    const sessionKey = directUrl ? `vod_${this.hashUrl(directUrl)}` : channelId;
+    const session = this.sessions.get(sessionKey);
     if (!session) {
       return { active: false, viewerCount: 0 };
     }
