@@ -200,26 +200,52 @@ export async function parseMultipleM3U8(urls: string[]): Promise<ParsedChannel[]
 }
 
 /**
- * Parse content type and series information from channel name
+ * Parse content type and series information from channel name and group title
  */
 function parseContentInfo(name: string, groupTitle: string): {
   contentType: ContentType;
   seriesInfo?: SeriesInfo;
   year?: number;
 } {
-  // Check for series pattern: S01E02, S01 E02, etc.
+  const groupLower = groupTitle.toLowerCase();
+  const nameLower = name.toLowerCase();
+
+  // 1. Check for live TV first (highest priority for country-coded channels)
+  // Country code pattern like "DE: ", "FR: ", "ALB: ", "EX-YU: " always indicates live TV
+  if (/^[A-Z][A-Z-]+:\s/.test(groupTitle)) {
+    return { contentType: 'live' };
+  }
+
+  // 2. Check for special symbols used for live channels
+  if (groupTitle.includes('▰') || groupTitle.includes('▱')) {
+    return { contentType: 'live' };
+  }
+
+  // 3. Check group-title for series indicators (most reliable for Xtream Codes)
+  // Note: "anime" alone is not enough - it should be combined with series keywords
+  const seriesIndicators = ['dizi', 'dizileri', 'serien', 'series', 'séries'];
+  const isAnimeSeries = groupLower.includes('anime') && (groupLower.includes('dizi') || groupLower.includes('series'));
+  const isSeries = seriesIndicators.some(indicator => groupLower.includes(indicator)) || isAnimeSeries;
+
+  // 4. Check for series pattern in name: S01E02, S01 E02, etc.
   const seriesPattern = /S(\d+)\s*E(\d+)/i;
   const seriesMatch = name.match(seriesPattern);
 
-  if (seriesMatch) {
-    const season = parseInt(seriesMatch[1]);
-    const episode = parseInt(seriesMatch[2]);
+  if (seriesMatch || isSeries) {
+    let season = 1;
+    let episode = 1;
+    let seriesName = name;
 
-    // Extract series name (everything before S01E02)
-    const seriesName = name
-      .replace(seriesPattern, '')
-      .replace(/\s+/g, ' ')
-      .trim();
+    if (seriesMatch) {
+      season = parseInt(seriesMatch[1]);
+      episode = parseInt(seriesMatch[2]);
+
+      // Extract series name (everything before S01E02)
+      seriesName = name
+        .replace(seriesPattern, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+    }
 
     // Extract year if present
     const yearMatch = seriesName.match(/\((\d{4})\)/);
@@ -241,17 +267,40 @@ function parseContentInfo(name: string, groupTitle: string): {
     };
   }
 
-  // Check for live TV indicators
-  const liveIndicators = ['live', 'tv', 'channel', 'news', 'sport'];
-  const isLive = liveIndicators.some(indicator =>
-    groupTitle.toLowerCase().includes(indicator)
-  );
+  // 5. Check group-title for movie indicators (VOD without series pattern)
+  const movieIndicators = ['film', 'movie'];  // Removed 'cinema' - it's often used for live movie channels
+  const isMovie = movieIndicators.some(indicator => groupLower.includes(indicator));
+
+  if (isMovie) {
+    const yearMatch = name.match(/\((\d{4})\)/);
+    const year = yearMatch ? parseInt(yearMatch[1]) : undefined;
+
+    return {
+      contentType: 'movie',
+      year
+    };
+  }
+
+  // 6. Check for other live TV indicators in group-title
+  const liveIndicators = [
+    'live', ' tv', 'channel', 'kanal', 'news', 'sport', 'paket', 'extra', 'ppv',
+    'ulusal', 'yerel', 'bölgesel', 'national', 'local', 'regional', 'raw', 'türk',
+    'unterhaltung', 'entertainment', 'music', 'musikk', 'documentary', 'dokumentar',
+    'kids', 'femije', 'cocuk', 'fetare', 'religion', 'radio', 'premium', 'cinema',
+    'amazon', 'netflix', 'event'  // Streaming platforms with live events
+  ];
+
+  // Check if it's a region/country code without colon (e.g., "EX-YU", "ARAB", "BALKAN")
+  const regionCodes = ['ex-yu', 'balkan', 'arab', 'nordic'];
+  const isRegion = regionCodes.some(region => groupLower === region || groupLower.startsWith(region + ' '));
+
+  const isLive = liveIndicators.some(indicator => groupLower.includes(indicator)) || isRegion;
 
   if (isLive) {
     return { contentType: 'live' };
   }
 
-  // Default to movie
+  // 5. Default to movie (most Xtream Codes content without series pattern is VOD/movies)
   const yearMatch = name.match(/\((\d{4})\)/);
   const year = yearMatch ? parseInt(yearMatch[1]) : undefined;
 
