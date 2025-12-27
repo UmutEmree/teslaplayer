@@ -25,20 +25,20 @@ export class FFmpegService extends EventEmitter {
 
       // Video encoding - MPEG1 for JSMpeg
       '-c:v', 'mpeg1video',
-      '-b:v', '2500k',
-      '-maxrate', '2500k',
-      '-bufsize', '5000k',
+      '-b:v', '2000k',
+      '-maxrate', '2000k',
+      '-bufsize', '2000k',        // Same as bitrate for consistent output
       '-s', '1280x720',
       '-r', '25',
       '-g', '25',
       '-bf', '0',
       '-threads', '4',
-      '-vsync', 'passthrough',
-      '-copyts',
-      '-start_at_zero',
-      '-max_muxing_queue_size', '2048',
+      '-vsync', 'vfr',            // Variable frame rate - follows source timing
+      '-frame_drop_threshold', '1.0',
+      '-max_muxing_queue_size', '1024',
 
-      // Audio encoding - MP2 for JSMpeg
+      // Audio encoding - MP2 for JSMpeg with resample filter
+      '-af', 'aresample=async=1000:first_pts=0',  // Smooth audio sync
       '-c:a', 'mp2',
       '-ar', '44100',
       '-ac', '2',
