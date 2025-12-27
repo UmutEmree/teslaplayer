@@ -21,13 +21,14 @@ export class FFmpegService extends EventEmitter {
       '-probesize', '1000000',
       '-i', this.hlsUrl,
 
-      // Video encoding - MPEG1 for JSMpeg (480p @ 30fps - balanced for server CPU)
+      // Video encoding - MPEG1 for JSMpeg (720p @ 30fps - high quality for dedicated server)
       '-c:v', 'mpeg1video',
-      '-b:v', '1500k',
-      '-s', '854x480',
+      '-b:v', '3000k',
+      '-s', '1280x720',
       '-r', '30',
       '-g', '30',           // Keyframe every 30 frames (1 sec)
       '-bf', '0',           // No B-frames for lower latency
+      '-threads', '4',      // Use multiple threads
 
       // Audio encoding - MP2 for JSMpeg (Stereo)
       '-c:a', 'mp2',

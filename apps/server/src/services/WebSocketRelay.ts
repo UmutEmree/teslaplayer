@@ -11,7 +11,7 @@ export class WebSocketRelay extends EventEmitter {
   private width: number;
   private height: number;
 
-  constructor(path: string, width = 854, height = 480) {
+  constructor(path: string, width = 1280, height = 720) {
     super();
     this.path = path;
     this.width = width;
