@@ -1,8 +1,8 @@
 import { EventEmitter } from 'events';
+import { Server as HTTPServer } from 'http';
 import { FFmpegService } from './FFmpegService';
 import { WebSocketRelay } from './WebSocketRelay';
 import { config } from '../config';
-import { httpServer } from '../index';
 
 interface StreamSession {
   id: string;
@@ -15,6 +15,12 @@ interface StreamSession {
 
 export class StreamManager extends EventEmitter {
   private sessions: Map<string, StreamSession> = new Map();
+  private httpServer: HTTPServer | null = null;
+
+  setHttpServer(server: HTTPServer): void {
+    this.httpServer = server;
+    console.log('[StreamManager] HTTP server set for WebSocket');
+  }
 
   // Simple hash function for URL to create unique session keys
   private hashUrl(url: string): string {
@@ -63,8 +69,11 @@ export class StreamManager extends EventEmitter {
     console.log(`[StreamManager] Starting stream for ${sessionKey} on path ${wsPath}`);
 
     // Create WebSocket relay
+    if (!this.httpServer) {
+      throw new Error('HTTP server not set. Call setHttpServer() first.');
+    }
     const wsRelay = new WebSocketRelay(wsPath);
-    await wsRelay.start(httpServer);
+    await wsRelay.start(this.httpServer);
 
     // Create FFmpeg service
     const ffmpeg = new FFmpegService(streamUrl);

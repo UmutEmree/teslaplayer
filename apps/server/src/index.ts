@@ -32,8 +32,9 @@ app.use(cors({
 }));
 app.use(express.json());
 
-// Initialize stream manager
+// Initialize stream manager and set HTTP server for WebSocket
 export const streamManager = new StreamManager();
+streamManager.setHttpServer(httpServer);
 
 // Routes
 app.use('/api/stream', streamRouter);
