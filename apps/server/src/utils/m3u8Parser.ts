@@ -462,23 +462,11 @@ export function groupSeries(channels: ParsedChannel[]): Series[] {
 }
 
 /**
- * Get predefined playlist URLs from the m3u8-xtream-playlist repo
+ * Get predefined playlist URLs
+ * Default: Xtream Codes API endpoint
  */
 export function getDefaultPlaylistUrls(): string[] {
   return [
-    // Top content
-    'https://aymrgknetzpucldhpkwm.supabase.co/storage/v1/object/public/tmdb/trending-series.m3u',
-    'https://aymrgknetzpucldhpkwm.supabase.co/storage/v1/object/public/tmdb/top-movies.m3u',
-
-    // Popular genres
-    'https://aymrgknetzpucldhpkwm.supabase.co/storage/v1/object/public/tmdb/action-movies.m3u',
-    'https://aymrgknetzpucldhpkwm.supabase.co/storage/v1/object/public/tmdb/comedy-movies.m3u',
-    'https://aymrgknetzpucldhpkwm.supabase.co/storage/v1/object/public/tmdb/horror-movies.m3u',
-    'https://aymrgknetzpucldhpkwm.supabase.co/storage/v1/object/public/tmdb/science-fiction-movies.m3u',
-
-    // Live TV categories
-    'https://iptv-org.github.io/iptv/categories/entertainment.m3u',
-    'https://iptv-org.github.io/iptv/categories/news.m3u',
-    'https://iptv-org.github.io/iptv/categories/sports.m3u',
+    'http://5gumutemre.bob7g.xyz:8080/get.php?username=5gumutemre&password=bdeSDF6gjng53r21&type=m3u_plus&output=mpegts'
   ];
 }
